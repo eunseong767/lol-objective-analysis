@@ -1,7 +1,8 @@
-import requests
-import json
+import os
+from dotenv import load_dotenv
 
-API_KEY = "RGAPI-70d33014-f076-45b3-9bcf-91008c0cf9f0"
+load_dotenv()
+API_KEY = os.getenv("RIOT_API_KEY")
 MATCH_ID = "KR_8335559651"
 
 url = f"https://asia.api.riotgames.com/lol/match/v5/matches/{MATCH_ID}"
