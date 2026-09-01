@@ -171,14 +171,36 @@ def validate():
     conn = get_conn()
     cur = conn.cursor()
 
-    cur.execute("SELECT COUNT(*) FROM match_team GROUP BY match_id HAVING COUNT(*) <> 2")
+    # 경기당 팀 행은 정확히 2개여야 한다.
+    # match 기준으로 LEFT JOIN 해야 팀 행이 "아예 없는" 경기까지 잡힌다
+    # (match_team 기준 GROUP BY로는 0행짜리가 걸러지지 않는다).
+    # game_duration=0 인 무효 경기(중단·재경기)는 objectives 자체가 없으므로 제외한다.
+    cur.execute(
+        """
+        SELECT m.match_id, COUNT(t.match_id) AS team_rows
+        FROM match m
+        LEFT JOIN match_team t ON t.match_id = m.match_id
+        WHERE m.game_duration > 0
+        GROUP BY m.match_id
+        HAVING COUNT(t.match_id) <> 2
+        """
+    )
     bad = cur.fetchall()
     if bad:
-        raise ValueError(f"팀 수가 2가 아닌 경기 {len(bad)}건")
+        sample = ", ".join(f"{mid}({n}행)" for mid, n in bad[:5])
+        cur.close()
+        conn.close()
+        raise ValueError(f"팀 행이 2개가 아닌 경기 {len(bad)}건 — {sample}")
+
+    # 무효 경기는 정상적으로 발생하므로 실패시키지 않고 기록만 남긴다.
+    cur.execute("SELECT COUNT(*) FROM match WHERE game_duration = 0")
+    invalid = cur.fetchone()[0]
+    if invalid:
+        log.warning(f"무효 경기 {invalid}건 (game_duration=0) — 검증 대상에서 제외")
 
     cur.execute("SELECT COUNT(*) FROM match")
     total = cur.fetchone()[0]
-    log.info(f"검증 통과 — 총 {total}경기")
+    log.info(f"검증 통과 — 총 {total}경기 (유효 {total - invalid}건)")
 
     cur.close()
     conn.close()
