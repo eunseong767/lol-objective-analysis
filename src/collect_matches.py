@@ -19,7 +19,20 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+import pathlib
+import datetime as dt
 
+KST = dt.timezone(dt.timedelta(hours=9))
+RAW_ROOT = pathlib.Path(__file__).resolve().parent.parent / "data" / "raw"
+
+
+def save_raw(match_id, data):
+    today = dt.datetime.now(KST).date().isoformat()
+    folder = RAW_ROOT / today
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"{match_id}.json").write_text(
+        json.dumps(data, ensure_ascii=False), encoding="utf-8"
+    )
 HEADERS = {"X-Riot-Token": API_KEY}
 SLEEP = 1.0
 BATCH = 500
@@ -106,6 +119,7 @@ def main():
         for (match_id,) in rows:
             try:
                 data = fetch_match(match_id)
+                save_raw(match_id, data) 
                 save_match(cur, match_id, data)
                 cur.execute(
                     "UPDATE match_queue SET status='done', fetched_at=NOW() WHERE match_id=%s",
